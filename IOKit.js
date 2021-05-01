@@ -13,12 +13,7 @@
 
 // Allow to set mappings between Mach ports and
 // IOUserClients as retrieved via launching script
-var mappings = [];
-rpc.exports = {
-    setmappings(arg) {
-        mappings = JSON.parse(arg);
-    }
-};
+var mappings = %s;
 
 // Hook all functions from IOKitLib.h
 // https://developer.apple.com/documentation/iokit/iokitlib_h?language=objc

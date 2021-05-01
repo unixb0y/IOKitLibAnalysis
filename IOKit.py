@@ -30,13 +30,12 @@ print(commandVar.output.decode())
 print(f'{mappings_str}\n')
 
 with open('IOKit.js', 'r') as f:
-    jscode = f.read()
+    jscode = f.read() %(mappings_str)
 
 process = frida.attach(binary)
 script = process.create_script(jscode)
 print('[ * ] Action starting shortly... !!!')
 
 script.load()
-script.exports.setmappings(mappings_str);
 
 sys.stdin.read()

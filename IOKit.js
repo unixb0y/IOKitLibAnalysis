@@ -11,6 +11,15 @@
 
 */
 
+// Allow to set mappings between Mach ports and
+// IOUserClients as retrieved via launching script
+var mappings = [];
+rpc.exports = {
+    setmappings(arg) {
+        mappings = JSON.parse(arg);
+    }
+};
+
 // Hook all functions from IOKitLib.h
 // https://developer.apple.com/documentation/iokit/iokitlib_h?language=objc
 const fnlist = `kern_return_t IOMasterPort(mach_port_t bootstrapPort, mach_port_t *masterPort);
@@ -112,22 +121,7 @@ kern_return_t IOCatalogueGetData(mach_port_t masterPort, uint32_t flag, char **b
 kern_return_t IOCatalogueModuleLoaded(mach_port_t masterPort, io_name_t name);
 kern_return_t IOCatalogueReset(mach_port_t masterPort, uint32_t flag);
 kern_return_t IORegistryDisposeEnumerator(io_enumerator_t enumerator) DEPRECATED_ATTRIBUTE;
-kern_return_t IOMapMemory(io_connect_t connect, uint32_t memoryType, task_port_t intoTask, vm_address_t *atAddress, vm_size_t *ofSize, uint32_t flags) DEPRECATED_ATTRIBUTE;
-kern_return_t IOCompatibiltyNumber(mach_port_t connect, uint32_t *objectNumber) DEPRECATED_ATTRIBUTE;
-kern_return_t IOConnectMethodScalarIScalarO(io_connect_t connect, uint32_t index, IOItemCount scalarInputCount, IOItemCount scalarOutputCount, ...) AVAILABLE_MAC_OS_X_VERSION_10_0_AND_LATER_BUT_DEPRECATED_IN_MAC_OS_X_VERSION_10_5;
-kern_return_t IOConnectMethodScalarIStructureO(io_connect_t connect, uint32_t index, IOItemCount scalarInputCount, IOByteCount *structureSize, ...) AVAILABLE_MAC_OS_X_VERSION_10_0_AND_LATER_BUT_DEPRECATED_IN_MAC_OS_X_VERSION_10_5;
-kern_return_t IOConnectMethodScalarIStructureI(io_connect_t connect, uint32_t index, IOItemCount scalarInputCount, IOByteCount structureSize, ...) AVAILABLE_MAC_OS_X_VERSION_10_0_AND_LATER_BUT_DEPRECATED_IN_MAC_OS_X_VERSION_10_5;
-kern_return_t IOConnectMethodStructureIStructureO(io_connect_t connect, uint32_t index, IOItemCount structureInputSize, IOByteCount *structureOutputSize, void *inputStructure, void *ouputStructure) AVAILABLE_MAC_OS_X_VERSION_10_0_AND_LATER_BUT_DEPRECATED_IN_MAC_OS_X_VERSION_10_5;
-kern_return_t io_connect_map_memory(io_connect_t connect, uint32_t memoryType, task_port_t intoTask, vm_address_t *atAddress, vm_size_t *ofSize, IOOptionBits options) DEPRECATED_ATTRIBUTE;
-kern_return_t io_connect_unmap_memory(io_connect_t connect, uint32_t memoryType, task_port_t fromTask, vm_address_t atAddress) DEPRECATED_ATTRIBUTE;
-kern_return_t io_connect_method_scalarI_scalarO(mach_port_t connection, int selector, io_scalar_inband_t input, mach_msg_type_number_t inputCnt, io_scalar_inband_t output, mach_msg_type_number_t *outputCnt) DEPRECATED_ATTRIBUTE;
-kern_return_t io_connect_method_scalarI_structureO(mach_port_t connection, int selector, io_scalar_inband_t input, mach_msg_type_number_t inputCnt, io_struct_inband_t output, mach_msg_type_number_t *outputCnt) DEPRECATED_ATTRIBUTE;
-kern_return_t io_connect_method_scalarI_structureI(mach_port_t connection, int selector, io_scalar_inband_t input, mach_msg_type_number_t inputCnt, io_struct_inband_t inputStruct, mach_msg_type_number_t inputStructCnt) DEPRECATED_ATTRIBUTE;
-kern_return_t io_connect_method_structureI_structureO(mach_port_t connection, int selector, io_struct_inband_t input, mach_msg_type_number_t inputCnt, io_struct_inband_t output, mach_msg_type_number_t *outputCnt) DEPRECATED_ATTRIBUTE;
-kern_return_t io_async_method_scalarI_scalarO(mach_port_t connection, mach_port_t wake_port, io_async_ref_t reference, mach_msg_type_number_t referenceCnt, int selector, io_scalar_inband_t input, mach_msg_type_number_t inputCnt, io_scalar_inband_t output, mach_msg_type_number_t *outputCnt) DEPRECATED_ATTRIBUTE;
-kern_return_t io_async_method_scalarI_structureO(mach_port_t connection, mach_port_t wake_port, io_async_ref_t reference, mach_msg_type_number_t referenceCnt, int selector, io_scalar_inband_t input, mach_msg_type_number_t inputCnt, io_struct_inband_t output, mach_msg_type_number_t *outputCnt) DEPRECATED_ATTRIBUTE;
-kern_return_t io_async_method_scalarI_structureI(mach_port_t connection, mach_port_t wake_port, io_async_ref_t reference, mach_msg_type_number_t referenceCnt, int selector, io_scalar_inband_t input, mach_msg_type_number_t inputCnt, io_struct_inband_t inputStruct, mach_msg_type_number_t inputStructCnt) DEPRECATED_ATTRIBUTE;
-kern_return_t io_async_method_structureI_structureO(mach_port_t connection, mach_port_t wake_port, io_async_ref_t reference, mach_msg_type_number_t referenceCnt, int selector, io_struct_inband_t input, mach_msg_type_number_t inputCnt, io_struct_inband_t output, mach_msg_type_number_t *outputCnt) DEPRECATED_ATTRIBUTE;`.split('\n');
+kern_return_t IOCompatibiltyNumber(mach_port_t connect, uint32_t *objectNumber) DEPRECATED_ATTRIBUTE;`.split('\n');
 
 fnlist.forEach(hookIt);
 
@@ -175,21 +169,194 @@ function log_call(fname, args, arglist) {
         // 3 important checks:
         // Check that it is a pointer,
         // then check the address is not 0
-        // and check we're not at the last
-        // variable so we don't get out of bounds
-        if (name.includes('*') && value != 0x0 && i != arglist.length-1) {
-            const name_without_star = name.slice(1);
-            var nextItemType = arglist[i+1].split(' ');
-            const nextItemName = nextItemType.pop();
-            const nextItemVal = args[i+1];
+        if (name.includes('*') && value != 0x0) {
+            // Check we're not at the last variable
+            // so we don't get out of bounds
+            if (i != arglist.length-1) {
+                const name_without_star = name.slice(1);
+                var nextItemType = arglist[i+1].split(' ');
+                const nextItemName = nextItemType.pop();
+                const nextItemVal = args[i+1];
 
-            // If everything is okay, we
-            // can dereference the pointer.
-            if (nextItemName == name_without_star+'Cnt') {
-                console.log(s);
-                console.log(value.readByteArray(parseInt(nextItemVal)));
+                // Check if the length is
+                // also given and if so, we can
+                // safely dereference the pointer.
+                if (nextItemName == name_without_star+'Cnt') {
+                    console.log(s);
+                    console.log(value.readByteArray(parseInt(nextItemVal)));
+                    continue;
+                }
+            }
+            
+            // Alternatively, in case it's
+            // a pointer to a variable of known
+            // type, we can also dereference properly.
+
+            // https://opensource.apple.com/source/xnu/xnu-792/osfmk/mach/port.h.auto.html
+            // typedef ipc_port_t mach_port_t;
+
+            // https://opensource.apple.com/source/xnu/xnu-792/osfmk/mach/port.h.auto.html
+            // typedef struct ipc_port *ipc_port_t
+
+            // https://opensource.apple.com/source/xnu/xnu-201/osfmk/ipc/ipc_port.h.auto.html
+            // struct ipc_port { ... }
+            if (type == 'mach_port_t') {
+                console.log(s + value);
                 continue;
             }
+            else if (type == 'io_iterator_t') {
+                console.log(s + value.readU8());
+                continue;
+            }
+            else if (type == 'const char') {
+                console.log(s + value.readUtf8String());
+                continue;
+            }
+            else if (type == 'mach_msg_header_t') {
+                console.log(s);
+                const mapping = mappings.find(function (el) { return el[0] == value.add(8).readU32() });
+                console.log('\t>> mach_msg_bits msgh_bits: 0x' + value.readU32().toString(16).padStart(8,'0'));
+                console.log('\t>> mach_msg_size_t msgh_size: 0x' + value.add(4).readU32().toString(16).padStart(8,'0'));
+                
+                const machport = '\t>> mach_port_t msgh_remote_port: 0x' + value.add(8).readU32().toString(16).padStart(8,'0');
+                if (mapping == undefined) {
+                    console.log(machport);
+                }
+                else {
+                    console.log(machport + ' ==> ' + mapping[1]);
+                }
+                
+                
+                console.log('\t>> mach_port_t msgh_local_port: 0x' + value.add(12).readU32().toString(16).padStart(8,'0'));
+                console.log('\t>> mach_msg_size_t msgh_reserved: 0x' + value.add(16).readU32().toString(16).padStart(8,'0'));
+                console.log('\t>> mach_msg_id_t msgh_id: 0x' + value.add(20).readU32().toString(16).padStart(8,'0'));
+                // console.log(s + '\n' + hexdump(value));
+                continue;
+            }
+            // else {
+            //     console.log(s + type);
+            // }
+        }
+        // non-pointer (*) types
+        else if (type == 'mach_port_t') {
+            const mapping = mappings.find(function (el) { return el[0] == parseInt(value) });
+            console.log(s + value + ' => ' + mapping[1]);
+            continue;
+        }
+        else if (type == 'CFStringRef') {
+            // - Debugging -
+            // for(var i=0;i<16;i++) {
+            //     console.log(hexdump(value.add(i*16).readPointer()));
+            // }
+
+            // console.log(hexdump(value));
+
+            // - From https://opensource.apple.com/source/CF/CF-476.18/CFString.c.auto.html -
+            // struct __CFString {
+            //     CFRuntimeBase base;
+            //     union { // In many cases the allocated structs are smaller than these
+            //         struct __inline1 {
+            //             CFIndex length;
+            //         } inline1;                                      // Bytes follow the length
+            //         struct __notInlineImmutable1 {
+            //             void *buffer;                               // Note that the buffer is in the same place for all non-inline variants of CFString
+            //             CFIndex length;                             
+            //             CFAllocatorRef contentsDeallocator;     // Optional; just the dealloc func is used
+            //         } notInlineImmutable1;                          // This is the usual not-inline immutable CFString
+            //         struct __notInlineImmutable2 {
+            //             void *buffer;
+            //             CFAllocatorRef contentsDeallocator;     // Optional; just the dealloc func is used
+            //         } notInlineImmutable2;                          // This is the not-inline immutable CFString when length is stored with the contents (first byte)
+            //         struct __notInlineMutable notInlineMutable;
+            //     } variants;
+            // };
+
+            // typedef struct __CFRuntimeBase {
+            //     uintptr_t _cfisa;
+            //     uint8_t _cfinfo[4];
+            // #if __LP64__
+            //     uint32_t _rc;
+            // #endif
+            // } CFRuntimeBase;
+
+            // typedef long CFIndex;
+
+            // This means the 2 string buffers are at the pointers
+            // sitting at base address + 16 and base address + 48.
+
+            const cfstring_base = new NativePointer(value);
+            const buffer1 = value.add(16).readPointer().readUtf8String();
+            const buffer2 = value.add(48).readPointer().readUtf8String();
+            console.log(s + buffer1);
+            continue;
+        }
+        else if (type.includes('CFDictionaryRef')) {
+            // typedef struct __CFDictionary CFDictionaryRef;
+
+            // - From https://opensource.apple.com/source/CF/CF-368/Collections.subproj/CFDictionary.c.auto.html -
+            // struct __CFDictionary {
+            //     CFRuntimeBase _base;
+            //     CFIndex _count;     /* number of values */
+            //     CFIndex _capacity;      /* maximum number of values */
+            //     CFIndex _bucketsNum;    /* number of slots */
+            //     uintptr_t _marker;
+            //     void *_context;     /* private */
+            //     CFIndex _deletes;
+            //     CFOptionFlags _xflags;      /* bits for GC */
+            //     const void **_keys;     /* can be NULL if not allocated yet */
+            //     const void **_values;   /* can be NULL if not allocated yet */
+            // };
+
+
+            var getKeysAndValuesAddr = Module.getExportByName('CoreFoundation', 'CFDictionaryGetKeysAndValues');
+            var cFDictionaryGetCountAddr = Module.getExportByName('CoreFoundation', 'CFDictionaryGetCount');
+
+            var getKeysAndValues = new NativeFunction(getKeysAndValuesAddr, 'void', ['pointer', 'pointer', 'pointer']);
+            var cFDictionaryGetCount = new NativeFunction(cFDictionaryGetCountAddr, 'long', ['pointer']);
+
+            const cfdict = new NativePointer(value);
+            const count = cFDictionaryGetCount(cfdict);
+
+            var keys = [];
+            var values = [];
+
+            var keyPointer = Memory.alloc(count);
+            // console.log('keyPointer before call:');
+            // console.log(hexdump(keyPointer));
+            var valuePointer = Memory.alloc(count);
+            var res = getKeysAndValues(cfdict, keyPointer, valuePointer);
+            
+            const stringBaseAddr = keyPointer.readPointer();
+            // console.log('keyPointer after call:');
+            // console.log(hexdump(keyPointer));
+            // console.log('reading from the pointer at that address:');
+            // console.log(hexdump(stringBaseAddr));
+            // console.log('reading from these addresses one by one:');
+            // console.log(stringBaseAddr.readPointer());
+            // console.log(stringBaseAddr.add(16).readPointer());
+            // console.log(stringBaseAddr.add(32).readPointer());
+            // console.log(stringBaseAddr.add(48).readPointer());
+
+            // console.log(stringBaseAddr.add(16).readPointer().readUtf8String());
+            // console.log(stringBaseAddr.add(0).readPointer().readUtf8String());
+
+            // const stringAddr = stringBaseAddr.readPointer();
+            // console.log(stringAddr);
+            // console.log(stringAddr.readUtf8String());
+            
+            // for (var x=0; x<30; x++) {
+            //     var ad = stringBaseAddr.add(x*32).readPointer();
+            //     console.log(ad.readUtf8String());
+            // }
+
+            
+
+            console.log(s + cfdict + '\n\tKeys: ' + stringBaseAddr.add(16).readPointer().readUtf8String());
+
+            // console.log(hexdump(keyPointer.readPointer().add(16).readPointer()));
+            // console.log('\tValues: ' + valuePointer.readPointer().add(16).readPointer().readUtf8String());
+            // console.log(hexdump(valuePointer.readPointer().add(16).readPointer()));
+            continue;
         }
 
         // If anything went wrong,
@@ -199,3 +366,11 @@ function log_call(fname, args, arglist) {
     console.log('');
 }
 
+var addr_mach = Module.getExportByName('libSystem.B.dylib', 'mach_msg');
+Interceptor.attach(addr_mach, {
+    onEnter: function(args) {
+        const name = 'mach_msg';
+        const arglist = ['mach_msg_header_t *msg', 'mach_msg_option_t option', 'mach_msg_size_t send_size', 'mach_msg_size_t rcv_size', 'mach_port_name_t rcv_name', 'mach_msg_timeout_t timeout', 'mach_port_name_t notify'];
+        log_call(name, args, arglist);
+    }
+});

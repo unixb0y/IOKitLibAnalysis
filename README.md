@@ -2,9 +2,9 @@
 
 How to run:
 ```
-sudo python IOKit.py IOKit.js coreaudiod
+sudo python IOKit.py coreaudiod
 ```
 ```
-sudo python IOKit.py IOKit.js bluetoothd
+sudo python IOKit.py bluetoothd
 ```
 etc.

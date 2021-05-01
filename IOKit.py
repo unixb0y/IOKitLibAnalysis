@@ -18,19 +18,21 @@ class Command(object):
     def returncode(self):
         return self.failed
 
-commandStr = 'sudo lsmp -p $(pidof ' + sys.argv[2] + ') | grep IOKIT-CONNECT | awk \'{print $1, $9}\''
+binary = sys.argv[1]
+
+commandStr = 'sudo lsmp -p $(pidof ' + binary + ') | grep IOKIT-CONNECT | awk \'{print $1, $9}\''
 commandVar = Command(commandStr).run()
 mappings = list(map(lambda line: [int(line.split(' ')[0], 16), line.split(' ')[1]], commandVar.output.decode().split('\n')[:-1])) # TODO maybe remove last element only if empty LOL but should always be
 mappings_str = json.dumps(mappings)
 
-print(f'[ * ] {sys.argv[2]} Mach ports:')
+print(f'[ * ] { binary } Mach ports:')
 print(commandVar.output.decode())
-print(mappings_str)
+print(f'{mappings_str}\n')
 
-with open(sys.argv[1], 'r') as f:
+with open('IOKit.js', 'r') as f:
     jscode = f.read()
 
-process = frida.attach(sys.argv[2])
+process = frida.attach(binary)
 script = process.create_script(jscode)
 print('[ * ] Action starting shortly... !!!')
 

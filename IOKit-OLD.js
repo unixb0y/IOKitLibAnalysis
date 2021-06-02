@@ -214,7 +214,7 @@ function log_call(fname, args, arglist) {
                 console.log('\t>> mach_msg_size_t msgh_size: 0x' + value.add(4).readU32().toString(16).padStart(8,'0'));
                 
                 const machport = '\t>> mach_port_t msgh_remote_port: 0x' + value.add(8).readU32().toString(16).padStart(8,'0');
-                if (mapping == undefined) {
+                if (mapping == undefined || mapping[1] == undefined) {
                     console.log(machport);
                 }
                 else {
@@ -235,7 +235,12 @@ function log_call(fname, args, arglist) {
         // non-pointer (*) types
         else if (type == 'mach_port_t') {
             const mapping = mappings.find(function (el) { return el[0] == parseInt(value) });
-            console.log(s + value + ' => ' + mapping[1]);
+            if (mapping != undefined && mapping[1] != undefined) {
+                console.log(s + value + ' => ' + mapping[1]);
+            }
+            else {
+                console.log(s + value);
+            }
             continue;
         }
         else if (type == 'CFStringRef') {
@@ -361,11 +366,11 @@ function log_call(fname, args, arglist) {
     console.log('');
 }
 
-var addr_mach = Module.getExportByName('libSystem.B.dylib', 'mach_msg');
-Interceptor.attach(addr_mach, {
-    onEnter: function(args) {
-        const name = 'mach_msg';
-        const arglist = ['mach_msg_header_t *msg', 'mach_msg_option_t option', 'mach_msg_size_t send_size', 'mach_msg_size_t rcv_size', 'mach_port_name_t rcv_name', 'mach_msg_timeout_t timeout', 'mach_port_name_t notify'];
-        log_call(name, args, arglist);
-    }
-});
+// var addr_mach = Module.getExportByName('libSystem.B.dylib', 'mach_msg');
+// Interceptor.attach(addr_mach, {
+//     onEnter: function(args) {
+//         const name = 'mach_msg';
+//         const arglist = ['mach_msg_header_t *msg', 'mach_msg_option_t option', 'mach_msg_size_t send_size', 'mach_msg_size_t rcv_size', 'mach_port_name_t rcv_name', 'mach_msg_timeout_t timeout', 'mach_port_name_t notify'];
+//         log_call(name, args, arglist);
+//     }
+// });
